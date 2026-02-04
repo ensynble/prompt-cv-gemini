@@ -1,63 +1,68 @@
-import json
-
 from google import genai
 from google.genai import types
-from pydantic import ValidationError
 
-from .models import VisionResult
+from .models import QAResult
 
 class GeminiClient:
-    def __init__(self, api_key: str, model: str, strict_json_only:bool = True):
+    def __init__(self, api_key: str, model: str = "gemini-3-flash-preview"):
+        if not api_key:
+            raise ValueError("Missing api_key")
         self.model = model
-        self.strict_json_only = strict_json_only
-        self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
-    
+        self.client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
+
     def _system_instruction(self) -> str:
         return (
-            "You are a visual inspection assistant. "
-            "Given an image and a user prompt, produce a structured result.\n"
-            "Rules:\n"
-            "1) Always return JSON that matches the provided schema.\n"
-            "2) Provide a short 'summary' answering the prompt.\n"
-            "3) If the prompt implies counting or locating specific instances, set 'count' and include one bbox per instance in 'detections'.\n"
-            "4) Bounding boxes must tightly enclose the relevant object/person.\n"
-            "5) If uncertain, either omit that detection or lower 'score'. Avoid hallucinations.\n"
-            "6) Use short snake_case labels (e.g., no_goggles, lid_uncovered).\n"
+            "Analyze the image and answer the user's checklist.\n"
+            "Return JSON matching the schema.\n"
+            "Values for 'answer': 'yes', 'no', 'unknown'.\n"
+            "evidence: < 100 chars phrase."
         )
 
-    
-    def analyze_image(self, prompt: str, image_bytes: bytes, mime_type: str) -> VisionResult:
-        img_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-        
-        config = {
-            "system_instruction": self._system_instruction(),
-            "response_mime_type": "application/json",
-            "response_json_schema": VisionResult.model_json_schema(),
-        }  
-        
-        response = self.client.models.generate_content(
+    def _thinking_config_for_model(self) -> types.ThinkingConfig | None:
+        """
+        Adapt thinking config by model:
+          - gemini-3-flash-preview -> thinking_level=MINIMAL
+          - gemini-2.5-flash      -> thinking_budget=0
+          - gemini-2.5-flash-lite -> None (do not set)
+        """
+        m = (self.model or "").lower()
+
+        if m == "gemini-3-flash-preview":
+            return types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
+
+        if m == "gemini-2.5-flash":
+            return types.ThinkingConfig(thinking_budget=0)
+        if m == "gemini-2.5-flash-lite":
+            return None
+        # default: don't force anything for unknown models
+        return None
+
+
+    async def analyze_image(self, prompt: str, image_bytes: bytes, mime_type: str) -> QAResult:
+        img_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type,media_resolution={"level": "MEDIA_RESOLUTION_LOW"})
+
+        thinking_cfg = self._thinking_config_for_model()
+
+        config_kwargs = dict(
+            system_instruction=self._system_instruction(),
+            response_mime_type="application/json",
+            response_schema=QAResult,
+            temperature=0.0,
+            max_output_tokens=1000,
+        )
+        if thinking_cfg is not None:
+            config_kwargs["thinking_config"] = thinking_cfg
+
+        config = types.GenerateContentConfig(**config_kwargs)
+
+        response = await self.client.aio.models.generate_content(
             model=self.model,
-            contents=[
-                img_part,
-                f"USER_PROMPT:\n{prompt}\n",
-            ],
+            contents=[img_part, f"Checklist Items:\n{prompt}"],
             config=config,
-        )  
-        
-        text = (response.text or "").strip()
-        if not text:
-            raise RuntimeError("Gemini returned empty response text.")
-        try:
-            return VisionResult.model_validate_json(text)
-        except ValidationError as ve:
-            raise RuntimeError(f"Gemini JSON schema mismatch: {ve.errors()} | Raw: {text[:500]}")
-        except Exception as e: 
-            if self.strict_json_only:
-                raise RuntimeError(f"Gemini returned non-conforming JSON. Raw:{text[:400]} ")
-            
-            try:
-                obj = json.loads(text)
-                return VisionResult.model_validate(obj)
-            
-            except Exception as e:
-                raise RuntimeError(f"Failed to parse Gemini JSON. Raw: {text[:400]}") from e
+        )
+
+        if getattr(response, "parsed", None):
+            return response.parsed
+
+        raw = getattr(response, "text", None) or getattr(response, "output_text", None) or str(response)
+        raise RuntimeError(f"Gemini failed to return parsed JSON. Raw: {raw}")
