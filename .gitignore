@@ -5,3 +5,4 @@ _pychache_/
 .idea/
 .vscode/
 .env
+.env.*

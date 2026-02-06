@@ -44,7 +44,7 @@ Once the service starts:
 - Swagger docs: http://localhost:8000/docs  
 
 You can now send requests to the backend or test endpoints directly from Swagger UI.
-```
+
 ---
 
 ## API Usage
@@ -127,4 +127,3 @@ For production deployments:
   - Celery / RQ
   - Cloud task systems (Pub/Sub, SQS, etc.)
 - Persist job results to a database or object storage
-```
