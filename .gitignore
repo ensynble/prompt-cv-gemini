@@ -4,3 +4,4 @@ _pychache_/
 .DS_Store
 .idea/
 .vscode/
+.env
