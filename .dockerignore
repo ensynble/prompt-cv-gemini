@@ -1,10 +1,27 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Python artifacts
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Local environment and secrets
+.env
 .venv/
+env/
 venv/
-build/
-dist/
-*.egg-info/
-.DS_Store
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+
+# Version control
+.git/
+.gitignore
+
+# Docker files (optional, but keeps the image clean)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation and project metadata
+README.md

@@ -1,0 +1,13 @@
+services:
+  cv-backend:
+    build: .
+    container_name: gemini-cv-prompt-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    # Volume mapping: This allows you to edit code in WSL and see 
+    # changes instantly without rebuilding the container.
+    volumes:
+      - .:/code
+    restart: always

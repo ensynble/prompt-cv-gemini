@@ -15,7 +15,6 @@ class GeminiClient:
             "Analyze the image and answer the user's checklist.\n"
             "Return JSON matching the schema.\n"
             "Values for 'answer': 'yes', 'no', 'unknown'.\n"
-            "evidence: < 100 chars phrase."
         )
 
     def _thinking_config_for_model(self) -> types.ThinkingConfig | None:

@@ -1,103 +1,130 @@
-# Backend Service README
+# 📑 Gemini CV Prompt Detection Backend
 
-## Requirements
+A high-performance, containerized FastAPI backend designed to analyze CV/Resume images using the Google Gemini API. This project supports evaluating multiple checklist items (prompts) against a single image upload in a single request.
 
--   Python 3.10+
--   Gemini API key
--   FastAPI, Uvicorn, `google-genai`, Pydantic
+---
 
-------------------------------------------------------------------------
+## 🚀 Quick Start
 
-## Setup & Run
+### 1. Prerequisites
+* **Docker & Docker Compose**: Installed and running (Docker Desktop for Windows/Mac or Docker Engine for Linux/WSL).
+* **Gemini API Key**: Obtain one from https://aistudio.google.com/
 
-1.  **(Optional)** Create and activate a virtual environment
+### 2. Setup Environment
+Clone the repository and prepare your configuration:
 
-``` bash
-python -m venv .venv
+```bash
+# Clone the project
+git clone <your-repo-link>
+cd backend
+
+# Create your local .env file from the template
+cp .env.example .env
 ```
 
-Activate it:
+Open the newly created `.env` file and paste your Gemini API key:
 
--   macOS / Linux:
-
-``` bash
-source .venv/bin/activate
+```env
+GEMINI_API_KEY=your_actual_key_here
 ```
 
--   Windows:
+---
 
-``` bash
-.venv\Scripts\activate
+### 3. Launch the Application
+
+Run the following command to build the Docker image and start the service:
+
+```bash
+docker-compose up --build
 ```
 
-> Conda is also fine if you prefer.
+Once the service starts:
 
-2.  **Install dependencies**
+- API base URL: http://localhost:8000  
+- Swagger docs: http://localhost:8000/docs  
 
-``` bash
-pip install -r requirements.txt
+You can now send requests to the backend or test endpoints directly from Swagger UI.
 ```
-
-3.  **Create `backend/.env`** (or wherever `config.py` reads from)
-
-``` env
-GEMINI_API_KEY=your_key_here
-GEMINI_MODEL=gemini-3-flash-preview
-MAX_IMAGE_BYTES=1000000
-ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-```
-
-Notes: - `MAX_IMAGE_BYTES` is specified in bytes - `ALLOW_ORIGINS` is a
-comma-separated list of allowed origins (scheme + host + port)
-
-4.  **Run the server**
-
-``` bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-------------------------------------------------------------------------
+---
 
 ## API Usage
 
-### 1. Health check
+### 1. Health Check
 
-``` http
+Verify that the service is running.
+
+```http
 GET /health
 ```
 
-### 2. Submit a job (returns job_id)
+---
 
-``` http
+### 2. Submit a Job
+
+Submit an image and prompt for processing. Returns a `job_id`.
+
+```http
 POST /jobs
 ```
 
--   form-data: `prompt`, `image`
--   Optional: `wait_ms` (0--30000)
+Request (multipart form-data):
 
-If `wait_ms > 0`, the request waits up to the specified time for
-completion and returns the current status or result.
+- `prompt` (string, required): The checklist or evaluation prompt
+- `image` (file, required): Image to analyze
+- `wait_ms` (int, optional, 0–30000):  
+  If greater than 0, the request will wait up to the specified time for the job to complete and return the result if available.
 
-### 3. Get job status / long poll
+Behavior:
 
-``` http
-GET /job/{job_id}?wait_ms=0–30000
+- If `wait_ms = 0` → returns immediately with `job_id`
+- If `wait_ms > 0` → waits for completion or timeout, then returns status/result
+
+---
+
+### 3. Get Job Status / Long Poll
+
+Check the status of a submitted job or wait for completion.
+
+```http
+GET /job/{job_id}?wait_ms=0-30000
 ```
 
--   Returns immediately if the job is complete
--   Otherwise waits up to `wait_ms` milliseconds, then returns
-    status/result
+Behavior:
 
-------------------------------------------------------------------------
+- Returns immediately if the job is already complete
+- Otherwise waits up to `wait_ms` milliseconds
+- Returns either:
+  - completed result
+  - current processing status
+  - timeout response
+
+---
 
 ## Job Processing Model
 
-Submitted jobs are enqueued and processed by background workers.
+Submitted jobs are placed into an in-memory queue and processed by background workers.
 
-Each worker: - Calls Gemini under a concurrency semaphore - Updates job
-status - Signals completion via an `asyncio.Event`
+Each worker:
 
-Notes: - All data is stored in memory; jobs are lost on restart - Active
-jobs are never evicted - Completed jobs are kept up to a fixed limit -
-For production use, replace the in-memory queue with Redis or a task
-system
+- Acquires a concurrency slot via a semaphore
+- Calls the Gemini API for image + prompt analysis
+- Updates the job status
+- Signals completion using an `asyncio.Event`
+
+---
+
+### Runtime Notes
+
+- Data is stored **in memory only**
+- Jobs are **lost if the service restarts**
+- Active jobs are **never evicted**
+- Completed jobs are retained up to a fixed capacity limit
+
+For production deployments:
+
+- Replace the in-memory queue with:
+  - Redis
+  - Celery / RQ
+  - Cloud task systems (Pub/Sub, SQS, etc.)
+- Persist job results to a database or object storage
+```
