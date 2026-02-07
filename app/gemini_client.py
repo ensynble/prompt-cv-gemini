@@ -14,6 +14,7 @@ class GeminiClient:
         return (
             "Analyze the image and answer the user's checklist.\n"
             "Return JSON matching the schema.\n"
+            "Preserve original question wording for 'question', no rephase or change\n"
             "Values for 'answer': 'yes', 'no', 'unknown'.\n"
         )
 
