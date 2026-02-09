@@ -47,6 +47,13 @@ You can now send requests to the backend or test endpoints directly from Swagger
 
 ---
 
+### 4. Launch the Web App
+```bash
+cd web
+python3 -m http.server 5173
+```
+open chrome browser and go to http://localhost:5173 click "install"
+
 ## API Usage
 
 ### 1. Health Check
