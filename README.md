@@ -15,7 +15,7 @@ Clone the repository and prepare your configuration:
 
 ```bash
 # Clone the project
-git clone <your-repo-link>
+git clone <repo-link>
 cd backend
 
 # Create your local .env file from the template
